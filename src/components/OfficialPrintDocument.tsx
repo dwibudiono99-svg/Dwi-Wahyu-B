@@ -48,7 +48,7 @@ export type DocumentType =
   | 'mading_warga';
 
 export type PaperSize = 'a4' | 'f4' | 'letter';
-export type MarginPreset = 'dinas' | 'normal' | 'kompak';
+export type MarginPreset = 'dinas' | 'arsip_lebar' | 'normal' | 'kompak';
 export type TypographyFont = 'bookman' | 'times' | 'arial' | 'jakarta';
 export type FontSize = '10pt' | '11pt' | '12pt';
 export type KopLogoType = 'garuda' | 'rt' | 'custom' | 'none';
@@ -301,6 +301,21 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [customQuotaCount, setCustomQuotaCount] = useState<number>(meeting.targetAttendeesCount || 25);
+  const [isEditingInlineQuota, setIsEditingInlineQuota] = useState<boolean>(false);
+  const [inlineQuotaInput, setInlineQuotaInput] = useState<string>(String(meeting.targetAttendeesCount || 25));
+
+  const handleSaveQuotaCount = (count: number) => {
+    const validCount = Math.max(1, count);
+    setCustomQuotaCount(validCount);
+    setInlineQuotaInput(String(validCount));
+    if (onUpdateMeeting) {
+      onUpdateMeeting({
+        ...meeting,
+        targetAttendeesCount: validCount,
+      });
+    }
+    setPrintToastMsg(`Target kuota peserta rapat berhasil diubah menjadi ${validCount} KK.`);
+  };
 
   // Update dynamic CSS for print margins and paper size
   useEffect(() => {
@@ -311,7 +326,8 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
     if (paperSize === 'f4') pageDimensions = '215mm 330mm';
     if (paperSize === 'letter') pageDimensions = '8.5in 11in';
 
-    let marginCss = '25mm 20mm 25mm 30mm'; // Dinas (Top 2.5cm, Right 2cm, Bottom 2.5cm, Left 3cm)
+    let marginCss = '25mm 20mm 25mm 30mm'; // Dinas Baku (Atas 2.5cm, Kanan 2.0cm, Bawah 2.5cm, Kiri 3.0cm)
+    if (marginPreset === 'arsip_lebar') marginCss = '30mm 20mm 25mm 35mm'; // Berkas Arsip Jilid (Kiri 3.5cm)
     if (marginPreset === 'normal') marginCss = '25mm 25mm 25mm 25mm';
     if (marginPreset === 'kompak') marginCss = '15mm 15mm 15mm 15mm';
 
@@ -382,21 +398,54 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
   const handleDownloadPdfToLocalDisk = async () => {
     const element = document.getElementById('printable-official-document-area');
     if (!element) {
-      setPrintToastMsg('Elemen dokumen tidak ditemukan.');
+      setPrintToastMsg('Elemen dokumen pelaporan tidak ditemukan.');
       return;
     }
 
     setIsGeneratingPdf(true);
-    setPrintToastMsg('Sedang memproses dan mengunduh file PDF ke disk lokal...');
+    setPrintToastMsg('Sedang menyusun berkas PDF resmi utuh dengan margin kedinasan...');
 
     try {
       const html2pdfModule = await import('html2pdf.js');
       const html2pdf = html2pdfModule.default;
       const cleanTitle = meeting.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-      const filename = `Berita_Acara_RT${profile.rtNumber}_${meeting.date}_${cleanTitle}.pdf`;
+      const filename = `Berita_Acara_Resmi_RT${profile.rtNumber}_${meeting.date}_${cleanTitle}.pdf`;
+
+      // Format margin kedinasan baku: [Top, Left, Bottom, Right]
+      let pdfMargin: [number, number, number, number] = [25, 30, 25, 20]; // Standar Permendagri: Atas 2.5cm, Kiri 3.0cm, Bawah 2.5cm, Kanan 2.0cm
+      if (marginPreset === 'arsip_lebar') pdfMargin = [30, 35, 25, 20]; // Berkas Jilid/Arsip (Kiri 3.5cm)
+      if (marginPreset === 'normal') pdfMargin = [25, 25, 25, 25];
+      if (marginPreset === 'kompak') pdfMargin = [15, 15, 15, 15];
+
+      // Perhitungan presisi lebar cetak bersih (Inner Printable Width) agar layout tidak downscale / teks tidak menyusut
+      const totalPaperWidthMm = paperSize === 'f4' ? 215 : paperSize === 'letter' ? 215.9 : 210;
+      const leftMarginMm = pdfMargin[1];
+      const rightMarginMm = pdfMargin[3];
+      const printableWidthMm = totalPaperWidthMm - leftMarginMm - rightMarginMm;
+
+      // Clone element and strip screen padding so margins are applied strictly by jsPDF
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.padding = '0';
+      clone.style.margin = '0';
+      clone.style.boxShadow = 'none';
+      clone.style.border = 'none';
+      clone.style.width = `${printableWidthMm}mm`;
+      clone.style.maxWidth = `${printableWidthMm}mm`;
+      clone.style.backgroundColor = '#ffffff';
+      clone.style.boxSizing = 'border-box';
+
+      // Hide all no-print elements inside the clone
+      clone.querySelectorAll('.no-print').forEach((el) => {
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      // Show print-only elements inside the clone
+      clone.querySelectorAll('.print-only').forEach((el) => {
+        (el as HTMLElement).style.display = 'block';
+      });
 
       const opt = {
-        margin: (marginPreset === 'kompak' ? [8, 10, 8, 10] : [12, 14, 12, 16]) as [number, number, number, number],
+        margin: pdfMargin,
         filename: filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: {
@@ -404,6 +453,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
           useCORS: true,
           letterRendering: true,
           logging: false,
+          windowWidth: 1024,
         },
         jsPDF: {
           unit: 'mm',
@@ -411,54 +461,23 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
           orientation: 'portrait' as const,
           compress: true,
         },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        pagebreak: { 
+          mode: ['avoid-all', 'css', 'legacy'],
+          before: '.page-break-before',
+          avoid: ['.page-break-inside-avoid', 'tr', 'table'] 
+        },
       };
 
-      await html2pdf().set(opt).from(element).save();
-      setPrintToastMsg(`File PDF berhasil diunduh dan disimpan ke disk lokal: ${filename}`);
+      await html2pdf().set(opt).from(clone).save();
+      setPrintToastMsg(`Berkas PDF resmi utuh berhasil diunduh ke disk lokal: ${filename}`);
     } catch (err: any) {
       console.error('Gagal generate PDF langsung:', err);
       // Fallback: trigger print dialog for saving as PDF
       window.print();
-      setPrintToastMsg('Membuka dialog cetak browser (Pilih "Simpan sebagai PDF" untuk menyimpan ke disk lokal).');
+      setPrintToastMsg('Membuka dialog cetak browser (Pilih "Simpan sebagai PDF" dengan Margin Default).');
     } finally {
       setIsGeneratingPdf(false);
     }
-  };
-
-  const handleDownloadHtmlArchive = () => {
-    const element = document.getElementById('printable-official-document-area');
-    if (!element) return;
-    const cleanTitle = meeting.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-    const filename = `Arsip_Berita_Acara_RT${profile.rtNumber}_${meeting.date}_${cleanTitle}.html`;
-
-    const htmlContent = `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Berita Acara Rapat RT ${profile.rtNumber} - ${meeting.title}</title>
-  <style>
-    body { font-family: 'Bookman Old Style', Georgia, serif; margin: 0; padding: 25px; background: #fff; color: #111; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 6px 10px; }
-    @media print { body { padding: 0; } }
-  </style>
-</head>
-<body>
-  ${element.innerHTML}
-</body>
-</html>`;
-
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setPrintToastMsg(`Arsip dokumen HTML berhasil disimpan ke disk lokal: ${filename}`);
   };
 
   // Font family helper class
@@ -492,10 +511,12 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
   // Margin padding for on-screen preview
   const getScreenMarginPadding = () => {
     switch (marginPreset) {
+      case 'arsip_lebar':
+        return 'pt-[30mm] pb-[25mm] pr-[20mm] pl-[35mm]';
       case 'kompak':
-        return 'p-[15mm]';
+        return 'pt-[15mm] pb-[15mm] pr-[15mm] pl-[15mm]';
       case 'normal':
-        return 'p-[25mm]';
+        return 'pt-[25mm] pb-[25mm] pr-[25mm] pl-[25mm]';
       case 'dinas':
       default:
         return 'pt-[25mm] pb-[25mm] pr-[20mm] pl-[30mm]';
@@ -586,48 +607,59 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
               <span className="hidden md:inline">Setelan Persuratan</span>
             </button>
 
-            {/* Direct PDF Download to Local Disk */}
+            {/* Primary Print / Save as PDF Dialog */}
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer"
+              title="Buka dialog cetak untuk mencetak ke kertas fisik atau Simpan sebagai PDF resmi (Margin Kedinasan Baku)"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak Dokumen Resmi (PDF)</span>
+            </button>
+
+            {/* Direct Official PDF Download to Local Disk */}
             <button
               onClick={handleDownloadPdfToLocalDisk}
               disabled={isGeneratingPdf}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer"
-              title="Unduh file dokumen PDF langsung dan simpan ke disk lokal komputer / HP Anda"
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              title="Unduh berkas pelaporan resmi lengkap (.pdf) langsung ke disk lokal"
             >
               {isGeneratingPdf ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Mengunduh PDF...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>Menyusun PDF...</span>
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
-                  <span>Unduh PDF ke Disk Lokal</span>
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>Unduh Berkas PDF (.pdf)</span>
                 </>
               )}
-            </button>
-
-            {/* Print / Save as PDF Dialog */}
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-700 transition-all cursor-pointer"
-              title="Buka dialog cetak browser untuk cetak ke kertas atau Simpan sebagai PDF"
-            >
-              <Printer className="w-4 h-4 text-slate-300" />
-              <span>Dialog Cetak</span>
-            </button>
-
-            {/* Save HTML Archive to Local Disk */}
-            <button
-              onClick={handleDownloadHtmlArchive}
-              className="hidden lg:flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 transition-all cursor-pointer"
-              title="Simpan file arsip HTML offline ke disk lokal"
-            >
-              <HardDrive className="w-3.5 h-3.5 text-slate-400" />
-              <span>Arsip (.html)</span>
             </button>
           </div>
         </div>
       </header>
+
+      {/* BANNER INFORMASI STANDAR PERSURATAN KEDINASAN RESMI */}
+      <div className="bg-slate-800/95 border-b border-slate-700 px-4 py-2 text-xs no-print shadow-xs">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded text-[11px] border border-emerald-500/30">
+              Format Pelaporan Resmi Kedinasan
+            </span>
+            <span className="text-slate-300 text-[11px]">
+              Margin Baku: <strong>Kiri 3,0 cm</strong> (Ruang Jilid/Arsip), <strong>Atas 2,5 cm</strong>, <strong>Kanan 2,0 cm</strong>, <strong>Bawah 2,5 cm</strong>
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400 flex items-center gap-3">
+            <span>Kertas: <strong className="text-slate-200 uppercase">{paperSize}</strong></span>
+            <span>•</span>
+            <span>Huruf: <strong className="text-slate-200">{fontFamily === 'bookman' ? 'Bookman Old Style (Permendagri)' : fontFamily === 'times' ? 'Times New Roman' : 'Arial'}</strong></span>
+            <span>•</span>
+            <span>Ukuran: <strong className="text-slate-200">{fontSize}</strong></span>
+          </div>
+        </div>
+      </div>
 
       {/* Non-print Toast Notification */}
       {printToastMsg && (
@@ -1026,19 +1058,23 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                       value={customQuotaCount}
                       onChange={(e) => {
                         const val = parseInt(e.target.value, 10);
-                        setCustomQuotaCount(isNaN(val) || val < 1 ? 1 : val);
+                        if (!isNaN(val) && val > 0) {
+                          handleSaveQuotaCount(val);
+                        } else {
+                          setCustomQuotaCount(1);
+                        }
                       }}
                       className="w-full bg-slate-900 border border-slate-600 text-slate-100 font-bold px-2 py-1 rounded text-xs text-center focus:ring-1 focus:ring-emerald-500"
                     />
                     <span className="text-[11px] font-semibold text-slate-400">KK</span>
                   </div>
                   <div className="flex flex-wrap gap-1 pt-0.5">
-                    {[15, 20, 25, 30, 40, 50, 100].map((num) => (
+                    {[15, 20, 25, 30, 40, 50, 75, 100].map((num) => (
                       <button
                         key={num}
                         type="button"
-                        onClick={() => setCustomQuotaCount(num)}
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer ${
+                        onClick={() => handleSaveQuotaCount(num)}
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
                           customQuotaCount === num
                             ? 'bg-emerald-600 text-white border-emerald-500'
                             : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
@@ -1231,7 +1267,71 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                         <td className="py-1 text-center font-bold text-slate-800">:</td>
                         <td className="py-1 text-slate-900">
                           <strong className="font-bold text-slate-950">{hadirCount} Orang / KK</strong>{' '}
-                          dari target {customQuotaCount} KK — Kuorum {Math.round((hadirCount / (customQuotaCount || 1)) * 100)}%{' '}
+                          dari target{' '}
+                          {isEditingInlineQuota ? (
+                            <span className="no-print inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-400 rounded-lg p-1 shadow-xs my-0.5">
+                              <input
+                                type="number"
+                                min={1}
+                                value={inlineQuotaInput}
+                                onChange={(e) => setInlineQuotaInput(e.target.value)}
+                                className="w-18 text-center font-bold text-slate-900 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[9.5pt] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = parseInt(inlineQuotaInput, 10);
+                                    if (!isNaN(val) && val > 0) {
+                                      handleSaveQuotaCount(val);
+                                    }
+                                    setIsEditingInlineQuota(false);
+                                  } else if (e.key === 'Escape') {
+                                    setInlineQuotaInput(String(customQuotaCount));
+                                    setIsEditingInlineQuota(false);
+                                  }
+                                }}
+                              />
+                              <span className="font-bold text-slate-700 text-xs">KK</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = parseInt(inlineQuotaInput, 10);
+                                  if (!isNaN(val) && val > 0) {
+                                    handleSaveQuotaCount(val);
+                                  }
+                                  setIsEditingInlineQuota(false);
+                                }}
+                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9pt] font-bold cursor-pointer transition-colors"
+                              >
+                                Simpan
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInlineQuotaInput(String(customQuotaCount));
+                                  setIsEditingInlineQuota(false);
+                                }}
+                                className="px-1.5 py-0.5 text-slate-500 hover:text-slate-800 text-[9pt] cursor-pointer"
+                              >
+                                Batal
+                              </button>
+                            </span>
+                          ) : (
+                            <>
+                              <strong className="font-bold text-slate-950">{customQuotaCount} KK</strong>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInlineQuotaInput(String(customQuotaCount));
+                                  setIsEditingInlineQuota(true);
+                                }}
+                                className="no-print text-emerald-700 hover:text-emerald-900 font-semibold underline text-[9pt] ml-1.5 cursor-pointer inline-flex items-center gap-0.5"
+                                title="Ketik manual kuota peserta rapat ini"
+                              >
+                                (Ubah Kuota)
+                              </button>
+                            </>
+                          )}{' '}
+                          — Kuorum {Math.round((hadirCount / (customQuotaCount || 1)) * 100)}%{' '}
                           <span className="font-semibold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[8.5pt]">
                             (Sah Sesuai Aturan RT)
                           </span>
