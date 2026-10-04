@@ -20,7 +20,10 @@ import {
   Info,
   PenTool,
   Shield,
-  Edit
+  Edit,
+  Download,
+  HardDrive,
+  Loader2,
 } from 'lucide-react';
 import { Meeting, RTProfile, StampConfig, Attendance } from '../types/meeting';
 import { formatDateIndonesian, formatDateTimeIndonesian } from '../utils/formatters';
@@ -329,8 +332,92 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
     (a) => a.status === 'Hadir' || a.status === 'Hadir Online'
   ).length;
 
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdfToLocalDisk = async () => {
+    const element = document.getElementById('printable-official-document-area');
+    if (!element) {
+      setPrintToastMsg('Elemen dokumen tidak ditemukan.');
+      return;
+    }
+
+    setIsGeneratingPdf(true);
+    setPrintToastMsg('Sedang memproses dan mengunduh file PDF ke disk lokal...');
+
+    try {
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default;
+      const cleanTitle = meeting.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `Berita_Acara_RT${profile.rtNumber}_${meeting.date}_${cleanTitle}.pdf`;
+
+      const opt = {
+        margin: (marginPreset === 'kompak' ? [8, 10, 8, 10] : [12, 14, 12, 16]) as [number, number, number, number],
+        filename: filename,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: paperSize === 'f4' ? ([215, 330] as [number, number]) : paperSize === 'letter' ? 'letter' : 'a4',
+          orientation: 'portrait' as const,
+          compress: true,
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      };
+
+      await html2pdf().set(opt).from(element).save();
+      setPrintToastMsg(`File PDF berhasil diunduh dan disimpan ke disk lokal: ${filename}`);
+    } catch (err: any) {
+      console.error('Gagal generate PDF langsung:', err);
+      // Fallback: trigger print dialog for saving as PDF
+      window.print();
+      setPrintToastMsg('Membuka dialog cetak browser (Pilih "Simpan sebagai PDF" untuk menyimpan ke disk lokal).');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleDownloadHtmlArchive = () => {
+    const element = document.getElementById('printable-official-document-area');
+    if (!element) return;
+    const cleanTitle = meeting.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+    const filename = `Arsip_Berita_Acara_RT${profile.rtNumber}_${meeting.date}_${cleanTitle}.html`;
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Berita Acara Rapat RT ${profile.rtNumber} - ${meeting.title}</title>
+  <style>
+    body { font-family: 'Bookman Old Style', Georgia, serif; margin: 0; padding: 25px; background: #fff; color: #111; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 6px 10px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  ${element.innerHTML}
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setPrintToastMsg(`Arsip dokumen HTML berhasil disimpan ke disk lokal: ${filename}`);
   };
 
   // Font family helper class
@@ -448,23 +535,54 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
             {/* Toggle Settings Drawer Button */}
             <button
               onClick={() => setShowSettingsDrawer(!showSettingsDrawer)}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all ${
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer ${
                 showSettingsDrawer
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
               }`}
             >
               <Sliders className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline">Setelan Persuratan</span>
+              <span className="hidden md:inline">Setelan Persuratan</span>
             </button>
 
-            {/* Primary Print Button */}
+            {/* Direct PDF Download to Local Disk */}
+            <button
+              onClick={handleDownloadPdfToLocalDisk}
+              disabled={isGeneratingPdf}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer"
+              title="Unduh file dokumen PDF langsung dan simpan ke disk lokal komputer / HP Anda"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Mengunduh PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Unduh PDF ke Disk Lokal</span>
+                </>
+              )}
+            </button>
+
+            {/* Print / Save as PDF Dialog */}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-5 py-2 rounded-xl shadow-md transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-700 transition-all cursor-pointer"
+              title="Buka dialog cetak browser untuk cetak ke kertas atau Simpan sebagai PDF"
             >
-              <Printer className="w-4 h-4" />
-              <span>Cetak / PDF</span>
+              <Printer className="w-4 h-4 text-slate-300" />
+              <span>Dialog Cetak</span>
+            </button>
+
+            {/* Save HTML Archive to Local Disk */}
+            <button
+              onClick={handleDownloadHtmlArchive}
+              className="hidden lg:flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 transition-all cursor-pointer"
+              title="Simpan file arsip HTML offline ke disk lokal"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-slate-400" />
+              <span>Arsip (.html)</span>
             </button>
           </div>
         </div>
@@ -893,6 +1011,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
         >
           {/* SIMULATED PRINT SHEET */}
           <div
+            id="printable-official-document-area"
             className={`bg-white shadow-2xl rounded-none border border-slate-300 print:border-none print:shadow-none print-page text-slate-900 ${getFontFamilyClass()} ${getPaperDimensionsClass()} ${getScreenMarginPadding()}`}
             style={{
               fontSize: fontSize,
