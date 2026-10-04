@@ -230,6 +230,22 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
   // Selected signature preview modal
   const [previewSignature, setPreviewSignature] = useState<{ name: string; url: string } | null>(null);
 
+  // Quota editing state
+  const [isEditingQuota, setIsEditingQuota] = useState(false);
+  const [quotaInput, setQuotaInput] = useState(String(meeting.targetAttendeesCount || 25));
+
+  const handleSaveQuota = () => {
+    const val = parseInt(quotaInput, 10);
+    if (!isNaN(val) && val > 0) {
+      onUpdateMeeting({
+        ...meeting,
+        targetAttendeesCount: val,
+      });
+      setToastMessage(`Target kuota rapat berhasil diubah menjadi ${val} KK.`);
+    }
+    setIsEditingQuota(false);
+  };
+
   // Quorum calculations
   const hadirCount = meeting.attendances.filter(
     (a) => a.status === 'Hadir' || a.status === 'Hadir Online'
@@ -524,7 +540,48 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
 
             <div className="flex items-center justify-between text-[11px] text-slate-500">
               <span>Hadir: <strong className="text-slate-800">{hadirCount} Orang</strong></span>
-              <span>Target: <strong className="text-slate-800">{meeting.targetAttendeesCount} KK</strong></span>
+              {isEditingQuota ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    value={quotaInput}
+                    onChange={(e) => setQuotaInput(e.target.value)}
+                    className="w-14 px-1.5 py-0.5 text-xs font-bold border border-emerald-400 rounded bg-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    autoFocus
+                  />
+                  <span className="text-[10px] text-slate-600 font-semibold">KK</span>
+                  <button
+                    onClick={handleSaveQuota}
+                    className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded cursor-pointer"
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQuotaInput(String(meeting.targetAttendeesCount || 25));
+                      setIsEditingQuota(false);
+                    }}
+                    className="px-1 py-0.5 text-slate-400 hover:text-slate-600 text-[10px] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              ) : (
+                <span className="flex items-center gap-1">
+                  Target: <strong className="text-slate-800">{meeting.targetAttendeesCount} KK</strong>
+                  <button
+                    onClick={() => {
+                      setQuotaInput(String(meeting.targetAttendeesCount || 25));
+                      setIsEditingQuota(true);
+                    }}
+                    className="text-emerald-700 hover:text-emerald-800 underline font-semibold text-[10px] ml-0.5 cursor-pointer"
+                    title="Ketik manual kuota peserta rapat ini"
+                  >
+                    (Ubah Kuota)
+                  </button>
+                </span>
+              )}
             </div>
           </div>
         </div>

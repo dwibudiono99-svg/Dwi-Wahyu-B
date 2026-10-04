@@ -45,7 +45,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   const [leader, setLeader] = useState('');
   const [notary, setNotary] = useState('');
   const [status, setStatus] = useState<MeetingStatus>('Terjadwal');
-  const [targetAttendeesCount, setTargetAttendeesCount] = useState<number>(25);
+  const [targetAttendeesInput, setTargetAttendeesInput] = useState<string>('25');
   const [agendaList, setAgendaList] = useState<string[]>(['Pembukaan dan Sambutan', 'Pembahasan Pokok Masalah', 'Tanya Jawab Warga', 'Kesepakatan & Penutup']);
   const [newAgendaItem, setNewAgendaItem] = useState('');
   const [budgetNotes, setBudgetNotes] = useState('');
@@ -61,7 +61,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       setLeader(initialMeeting.leader);
       setNotary(initialMeeting.notary);
       setStatus(initialMeeting.status);
-      setTargetAttendeesCount(initialMeeting.targetAttendeesCount || 25);
+      setTargetAttendeesInput(String(initialMeeting.targetAttendeesCount ?? 25));
       setAgendaList(initialMeeting.agenda || []);
       setBudgetNotes(initialMeeting.budgetNotes || '');
     } else {
@@ -79,7 +79,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       setLeader(`${profile.ketuaRt} (Ketua RT)`);
       setNotary(`${profile.sekretaris} (Sekretaris)`);
       setStatus('Terjadwal');
-      setTargetAttendeesCount(25);
+      setTargetAttendeesInput('25');
       setAgendaList([
         'Pembukaan & Sambutan Ketua RT',
         'Laporan Kas & Evaluasi Kegiatan Bulan Lalu',
@@ -117,7 +117,10 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       leader: leader.trim(),
       notary: notary.trim(),
       status,
-      targetAttendeesCount: Number(targetAttendeesCount) || 20,
+      targetAttendeesCount: (() => {
+        const p = parseInt(targetAttendeesInput, 10);
+        return !isNaN(p) && p > 0 ? p : 25;
+      })(),
       agenda: agendaList,
       budgetNotes: budgetNotes.trim() || undefined,
     });
@@ -278,17 +281,45 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-slate-400" />
-                Target Undangan (KK)
+              <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  Kuota Peserta / Target KK <span className="text-rose-500">*</span>
+                </span>
+                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
+                  Ketik Manual
+                </span>
               </label>
-              <input
-                type="number"
-                min={1}
-                value={targetAttendeesCount}
-                onChange={(e) => setTargetAttendeesCount(parseInt(e.target.value) || 20)}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  placeholder="Ketik kuota..."
+                  value={targetAttendeesInput}
+                  onChange={(e) => setTargetAttendeesInput(e.target.value)}
+                  className="w-full px-3 py-2 pr-10 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+                  KK
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {[15, 20, 25, 30, 35, 50, 75, 100].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setTargetAttendeesInput(String(num))}
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${
+                      targetAttendeesInput === String(num)
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {num} KK
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

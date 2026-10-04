@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Meeting, RTProfile, StampConfig, Attendance } from '../types/meeting';
 import { formatDateIndonesian, formatDateTimeIndonesian } from '../utils/formatters';
-import { generateDefaultDocNumber, getFormalDatePhraze } from '../utils/persuratan';
+import { generateDefaultDocNumber, getFormalDatePhraze, getDayNameIndonesian } from '../utils/persuratan';
 import { StampBadge } from './StampBadge';
 import { StampCustomizerModal } from './StampCustomizerModal';
 import { SignatureCaptureModal } from './SignatureCaptureModal';
@@ -300,6 +300,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
   // UI State
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [customQuotaCount, setCustomQuotaCount] = useState<number>(meeting.targetAttendeesCount || 25);
 
   // Update dynamic CSS for print margins and paper size
   useEffect(() => {
@@ -318,6 +319,46 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
       @page {
         size: ${pageDimensions};
         margin: ${marginCss};
+      }
+      @media print {
+        html, body {
+          background: #ffffff !important;
+          color: #0f172a !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+        .print-page {
+          box-shadow: none !important;
+          border: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .page-break-before {
+          page-break-before: always !important;
+          break-before: page !important;
+        }
+        .page-break-inside-avoid {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        table {
+          border-collapse: collapse !important;
+        }
+        thead {
+          display: table-header-group !important;
+        }
+        tr {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
       }
     `;
 
@@ -970,6 +1011,45 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                   </select>
                 </div>
 
+                {/* Pengaturan Kuota / Target KK Dokumen */}
+                <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-300">Target Kuota Warga:</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800">
+                      Ketik Bebas
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      value={customQuotaCount}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setCustomQuotaCount(isNaN(val) || val < 1 ? 1 : val);
+                      }}
+                      className="w-full bg-slate-900 border border-slate-600 text-slate-100 font-bold px-2 py-1 rounded text-xs text-center focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <span className="text-[11px] font-semibold text-slate-400">KK</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {[15, 20, 25, 30, 40, 50, 100].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setCustomQuotaCount(num)}
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border cursor-pointer ${
+                          customQuotaCount === num
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-1.5 pt-1">
                   <label className="flex items-center justify-between text-[11px] font-semibold text-slate-300 cursor-pointer">
                     <span>Mengetahui Ketua RW:</span>
@@ -1099,61 +1179,62 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
             {/* =================================================================== */}
             {(docType === 'lengkap' || docType === 'berita_acara' || docType === 'mading_warga') && (
               <div className="space-y-5">
-                {/* JUDUL DAN NOMOR NASKAH DINAS */}
-                <div className="text-center my-4">
+                {/* JUDUL DAN NOMOR NASKAH DINAS RESMI RT */}
+                <div className="text-center my-4 space-y-1">
                   <h2 className="text-[13pt] font-black uppercase underline decoration-2 underline-offset-4 tracking-wider text-slate-950">
-                    BERITA ACARA MUSYAWARAH WARGA
+                    BERITA ACARA MUSYAWARAH RUKUN TETANGGA
                   </h2>
-                  <p className="text-[10pt] font-bold text-slate-800 mt-1">
-                    Nomor: {docNumber}
+                  <p className="text-[10pt] font-bold text-slate-900 tracking-wide uppercase">
+                    NOMOR : {docNumber}
                   </p>
-                  <p className="text-[9.5pt] font-medium text-slate-600 italic">
-                    Tentang: {meeting.title}
+                  <p className="text-[10pt] font-bold text-slate-800 uppercase tracking-wide pt-0.5">
+                    TENTANG : {meeting.title}
                   </p>
                 </div>
 
                 {/* PARAGRAF PEMBUKA BAKU PERSURATAN */}
-                <p className="text-justify leading-relaxed">
-                  Pada {getFormalDatePhraze(meeting.date)}, bertempat di <strong>{meeting.location}</strong>, telah diselenggarakan Musyawarah Warga Rukun Tetangga (RT) {profile.rtNumber} Rukun Warga (RW) {profile.rwNumber} Kelurahan {profile.kelurahan}, Kecamatan {profile.kecamatan}, {profile.kota}.
+                <p className="text-justify leading-relaxed indent-8">
+                  Pada {getFormalDatePhraze(meeting.date)}, bertempat di <strong>{meeting.location}</strong>, telah diselenggarakan Musyawarah Warga Rukun Tetangga (RT) {profile.rtNumber} Rukun Warga (RW) {profile.rwNumber}, Kelurahan {profile.kelurahan}, Kecamatan {profile.kecamatan}, {profile.kota}, yang dihadiri oleh Pengurus RT dan seluruh warga anggota musyawarah sebagaimana tercantum dalam Lembar Daftar Hadir terlampir, dengan rincian pelaksanaan sebagai berikut:
                 </p>
 
-                {/* KOTAK INFORMASI MUSYAWARAH DINAS */}
-                <div className="border border-slate-300 bg-slate-50/50 rounded p-3 text-[10pt]">
-                  <table className="w-full text-left">
+                {/* KOTAK INFORMASI MUSYAWARAH DINAS (TITIK DUA SEJAJAR) */}
+                <div className="border border-slate-400 bg-white p-3.5 text-[10pt] shadow-2xs">
+                  <table className="w-full text-left border-collapse">
                     <tbody>
                       <tr className="align-top">
-                        <td className="w-40 py-1 font-semibold text-slate-700">Hari / Tanggal</td>
-                        <td className="w-4 py-1 text-center">:</td>
-                        <td className="py-1 font-bold text-slate-900">{formatDateIndonesian(meeting.date)}</td>
+                        <td className="w-48 py-1 font-semibold text-slate-800">1. Hari / Tanggal</td>
+                        <td className="w-4 py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 font-bold text-slate-950">{getDayNameIndonesian(meeting.date)}, {formatDateIndonesian(meeting.date)}</td>
                       </tr>
                       <tr className="align-top">
-                        <td className="py-1 font-semibold text-slate-700">Waktu Pelaksanaan</td>
-                        <td className="py-1 text-center">:</td>
-                        <td className="py-1">{meeting.startTime} s/d {meeting.endTime || 'Selesai'} WIB</td>
+                        <td className="py-1 font-semibold text-slate-800">2. Waktu Pelaksanaan</td>
+                        <td className="py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 text-slate-900">{meeting.startTime} s/d {meeting.endTime || 'Selesai'} WIB</td>
                       </tr>
                       <tr className="align-top">
-                        <td className="py-1 font-semibold text-slate-700">Tempat Musyawarah</td>
-                        <td className="py-1 text-center">:</td>
-                        <td className="py-1">{meeting.location}</td>
+                        <td className="py-1 font-semibold text-slate-800">3. Tempat Musyawarah</td>
+                        <td className="py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 text-slate-900 font-medium">{meeting.location}</td>
                       </tr>
                       <tr className="align-top">
-                        <td className="py-1 font-semibold text-slate-700">Pimpinan Musyawarah</td>
-                        <td className="py-1 text-center">:</td>
-                        <td className="py-1 font-semibold">{meeting.leader}</td>
+                        <td className="py-1 font-semibold text-slate-800">4. Pimpinan Musyawarah</td>
+                        <td className="py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 font-bold text-slate-950">{meeting.leader} (Ketua RT {profile.rtNumber})</td>
                       </tr>
                       <tr className="align-top">
-                        <td className="py-1 font-semibold text-slate-700">Notulis / Sekretaris</td>
-                        <td className="py-1 text-center">:</td>
-                        <td className="py-1 font-semibold">{meeting.notary}</td>
+                        <td className="py-1 font-semibold text-slate-800">5. Notulis / Sekretaris</td>
+                        <td className="py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 text-slate-900 font-semibold">{meeting.notary}</td>
                       </tr>
                       <tr className="align-top">
-                        <td className="py-1 font-semibold text-slate-700">Kehadiran Warga (Kuorum)</td>
-                        <td className="py-1 text-center">:</td>
-                        <td className="py-1">
-                          <strong className="font-bold text-emerald-950">
-                            {hadirCount} Orang / KK
-                          </strong>{' '}
-                          (dari target {meeting.targetAttendeesCount} KK — Kuorum {Math.round((hadirCount / (meeting.targetAttendeesCount || 1)) * 100)}% Sah Sesuai Aturan RT)
+                        <td className="py-1 font-semibold text-slate-800">6. Kuorum Kehadiran</td>
+                        <td className="py-1 text-center font-bold text-slate-800">:</td>
+                        <td className="py-1 text-slate-900">
+                          <strong className="font-bold text-slate-950">{hadirCount} Orang / KK</strong>{' '}
+                          dari target {customQuotaCount} KK — Kuorum {Math.round((hadirCount / (customQuotaCount || 1)) * 100)}%{' '}
+                          <span className="font-semibold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[8.5pt]">
+                            (Sah Sesuai Aturan RT)
+                          </span>
                         </td>
                       </tr>
                     </tbody>
@@ -1162,7 +1243,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
 
                 {/* PASAL / BUTIR I: AGENDA & SUSUNAN ACARA */}
                 <div className="space-y-1.5">
-                  <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-300 pb-0.5">
+                  <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5">
                     I. SUSUNAN ACARA & AGENDA PEMBAHASAN
                   </h3>
                   <ol className="list-decimal list-inside pl-2 space-y-1">
@@ -1177,10 +1258,10 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                 {/* PASAL / BUTIR II: JALANNYA MUSYAWARAH */}
                 {showMinutesDetail && meeting.minutes && (
                   <div className="space-y-1.5">
-                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-300 pb-0.5">
-                      II. RINGKASAN JALANNYA MUSYAWARAH
+                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5">
+                      II. NOTULENSI & JALANNYA MUSYAWARAH
                     </h3>
-                    <div className="whitespace-pre-wrap pl-2 leading-relaxed text-justify bg-slate-50/30 p-2.5 rounded border border-slate-100">
+                    <div className="whitespace-pre-wrap pl-2 leading-relaxed text-justify bg-slate-50/40 p-3 rounded border border-slate-200">
                       {meeting.minutes}
                     </div>
                   </div>
@@ -1189,8 +1270,8 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                 {/* PASAL / BUTIR III: KEPUTUSAN KESEPAKATAN MUFAKAT */}
                 {showDecisions && (
                   <div className="space-y-1.5 page-break-inside-avoid">
-                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-300 pb-0.5">
-                      III. HASIL KEPUTUSAN & KESEPAKATAN BERSAMA (MUFAKAT)
+                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5">
+                      III. POKOK-POKOK KEPUTUSAN & KESEPAKATAN BERSAMA (MUFAKAT)
                     </h3>
                     {meeting.decisions && meeting.decisions.length > 0 ? (
                       <ul className="list-disc list-inside pl-2 space-y-1.5 font-medium">
@@ -1201,7 +1282,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                         ))}
                       </ul>
                     ) : (
-                      <p className="italic text-slate-500 pl-2">Seluruh warga menyetujui laporan pertanggungjawaban kegiatan RT secara mufakat.</p>
+                      <p className="italic text-slate-600 pl-2">Seluruh warga menyetujui seluruh materi pembahasan musyawarah secara mufakat.</p>
                     )}
                   </div>
                 )}
@@ -1209,27 +1290,27 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                 {/* PASAL / BUTIR IV: RENCANA TINDAK LANJUT & PENANGGUNG JAWAB (ACTION PLAN) */}
                 {showActionItems && meeting.actionItems && meeting.actionItems.length > 0 && (
                   <div className="space-y-2 page-break-inside-avoid">
-                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-300 pb-0.5">
-                      IV. RENCANA TINDAK LANJUT & PENANGGUNG JAWAB (PIC)
+                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5">
+                      IV. RENCANA TINDAK LANJUT & PENANGGUNG JAWAB (ACTION PLAN)
                     </h3>
-                    <table className="w-full text-left border-collapse border border-slate-400 text-[9.5pt]">
+                    <table className="w-full text-left border-collapse border border-slate-500 text-[9.5pt]">
                       <thead>
-                        <tr className="bg-slate-100 font-bold text-slate-900">
-                          <th className="border border-slate-400 px-2 py-1.5 text-center w-8">No</th>
-                          <th className="border border-slate-400 px-3 py-1.5">Uraian Tugas / Rencana Kegiatan</th>
-                          <th className="border border-slate-400 px-3 py-1.5 w-44">Penanggung Jawab (PIC)</th>
-                          <th className="border border-slate-400 px-2 py-1.5 w-24 text-center">Batas Waktu</th>
-                          <th className="border border-slate-400 px-2 py-1.5 w-20 text-center">Status</th>
+                        <tr className="bg-slate-100 font-bold text-slate-950">
+                          <th className="border border-slate-500 px-2 py-1.5 text-center w-8">No</th>
+                          <th className="border border-slate-500 px-3 py-1.5">Uraian Tugas / Rencana Kerja</th>
+                          <th className="border border-slate-500 px-3 py-1.5 w-44">Penanggung Jawab (PIC)</th>
+                          <th className="border border-slate-500 px-2 py-1.5 w-24 text-center">Batas Waktu</th>
+                          <th className="border border-slate-500 px-2 py-1.5 w-20 text-center">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {meeting.actionItems.map((act, i) => (
                           <tr key={act.id}>
                             <td className="border border-slate-400 px-2 py-1.5 text-center">{i + 1}</td>
-                            <td className="border border-slate-400 px-3 py-1.5 font-medium">{act.task}</td>
+                            <td className="border border-slate-400 px-3 py-1.5 font-medium text-slate-900">{act.task}</td>
                             <td className="border border-slate-400 px-3 py-1.5">{act.pic}</td>
                             <td className="border border-slate-400 px-2 py-1.5 text-center">{act.deadline}</td>
-                            <td className="border border-slate-400 px-2 py-1.5 text-center font-bold">
+                            <td className="border border-slate-400 px-2 py-1.5 text-center font-bold text-slate-900">
                               {act.status}
                             </td>
                           </tr>
@@ -1242,33 +1323,38 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                 {/* PASAL / BUTIR V: CATATAN KEUANGAN JIKA ADA */}
                 {showBudget && meeting.budgetNotes && (
                   <div className="space-y-1 page-break-inside-avoid">
-                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-300 pb-0.5">
-                      V. CATATAN ANGGARAN & ALOKASI KAS RT
+                    <h3 className="font-bold uppercase tracking-wider text-slate-950 border-b border-slate-400 pb-0.5">
+                      V. ALOKASI ANGGARAN & KEUANGAN KAS RT
                     </h3>
-                    <p className="pl-2 leading-relaxed bg-slate-50 p-2 rounded border border-slate-200">
+                    <p className="pl-2 leading-relaxed bg-slate-50 p-2.5 rounded border border-slate-300">
                       {meeting.budgetNotes}
                     </p>
                   </div>
                 )}
 
                 {/* KALIMAT PENUTUP RESMI TATA NASKAH DINAS */}
-                <p className="text-justify leading-relaxed page-break-inside-avoid pt-2">
-                  Demikian Berita Acara Musyawarah Warga ini dibuat dengan sebenarnya dengan penuh tanggung jawab, berdasarkan azas musyawarah untuk mufakat, untuk dapat dipergunakan sebagaimana mestinya.
+                <p className="text-justify leading-relaxed indent-8 page-break-inside-avoid pt-2 mb-4">
+                  Demikian Berita Acara Musyawarah Rukun Tetangga ini dibuat dengan sebenarnya dan penuh rasa tanggung jawab, dilandasi asas musyawarah untuk mufakat serta semangat kerukunan dan kekeluargaan, untuk dapat dipergunakan sebagaimana mestinya dan menjadi pedoman bersama bagi seluruh warga.
                 </p>
 
                 {/* =============================================================== */}
                 {/* LEMBAR PENGESAHAN / KAKI SURAT (TANDA TANGAN & STEMPEL DINAS) */}
                 {/* =============================================================== */}
-                <div className="pt-6 page-break-inside-avoid">
-                  <p className="text-right text-[10pt] mb-6">
-                    Ditetapkan di: {profile.kelurahan}, {formatDateIndonesian(meeting.date)}
-                  </p>
+                <div className="pt-4 page-break-inside-avoid">
+                  {/* Titimangsa Sejajar Kolom Kanan */}
+                  <div className="flex justify-end mb-3">
+                    <div className="w-72 text-left text-[10pt] space-y-0.5">
+                      <p>Ditetapkan di : <span className="font-semibold">{profile.kelurahan}</span></p>
+                      <p>Pada tanggal  : <span className="font-semibold">{formatDateIndonesian(meeting.date)}</span></p>
+                    </div>
+                  </div>
 
-                  <div className={`grid ${showMengetahuiRW ? 'grid-cols-3' : 'grid-cols-2'} gap-6 text-center text-[10pt]`}>
-                    {/* Notulis / Sekretaris RT */}
+                  {/* 2 Kolom Pelaksana: Notulis (Kiri) dan Ketua RT (Kanan) */}
+                  <div className="grid grid-cols-2 gap-8 text-center text-[10pt]">
+                    {/* 1. Notulis / Sekretaris RT */}
                     <div className="flex flex-col items-center justify-between">
                       <p className="font-semibold text-slate-800">Notulis / Sekretaris RT,</p>
-                      <div className="h-20 flex items-center justify-center relative w-full">
+                      <div className="h-24 flex items-center justify-center relative w-full my-1">
                         {notarySignature ? (
                           <img
                             src={notarySignature}
@@ -1283,7 +1369,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                                 initialSig: notarySignature,
                               })
                             }
-                            className="h-16 max-w-[120px] object-contain mx-auto cursor-pointer"
+                            className="h-18 max-w-[130px] object-contain mx-auto cursor-pointer"
                             title="Klik untuk mengubah tanda tangan Notulis"
                           />
                         ) : (
@@ -1316,68 +1402,15 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                       </div>
                     </div>
 
-                    {/* Mengetahui Ketua RW (Opsional) */}
-                    {showMengetahuiRW && (
-                      <div className="flex flex-col items-center justify-between">
-                        <p className="font-semibold text-slate-800">Mengetahui:</p>
-                        <div className="h-20 flex items-center justify-center relative w-full">
-                          {rwSignature ? (
-                            <img
-                              src={rwSignature}
-                              alt="TTD RW"
-                              onClick={() =>
-                                setSigCaptureState({
-                                  isOpen: true,
-                                  title: 'Ubah Tanda Tangan Ketua RW',
-                                  targetName: rwLeaderName,
-                                  targetRole: 'Ketua RW',
-                                  type: 'rw',
-                                  initialSig: rwSignature,
-                                })
-                              }
-                              className="h-16 max-w-[120px] object-contain mx-auto cursor-pointer"
-                              title="Klik untuk mengubah tanda tangan Ketua RW"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSigCaptureState({
-                                  isOpen: true,
-                                  title: 'Rekam Tanda Tangan Ketua RW',
-                                  targetName: rwLeaderName,
-                                  targetRole: 'Ketua RW',
-                                  type: 'rw',
-                                })
-                              }
-                              className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            >
-                              <PenTool className="w-3.5 h-3.5 text-emerald-600" />
-                              Bubuhkan TTD
-                            </button>
-                          )}
-                          {!rwSignature && (
-                            <span className="print-only text-[9pt] text-slate-400 italic font-mono">[Tanda Tangan]</span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-950 underline uppercase tracking-wide">
-                            {rwLeaderName}
-                          </p>
-                          <p className="text-[9pt] text-slate-600">Ketua RW {profile.rwNumber}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Pimpinan Musyawarah / Ketua RT (dengan Stempel Resmi Kustom) */}
+                    {/* 2. Pimpinan Musyawarah / Ketua RT (dengan Stempel Resmi di sisi kiri TTD) */}
                     <div className="flex flex-col items-center justify-between relative">
-                      <p className="font-semibold text-slate-800">Pimpinan Rapat / Ketua RT,</p>
+                      <p className="font-semibold text-slate-800">Pimpinan Musyawarah / Ketua RT,</p>
                       
-                      <div className="h-20 flex items-center justify-center relative w-full">
-                        {/* Stempel Dinas Bulat RT Interaktif */}
+                      <div className="h-24 flex items-center justify-center relative w-full my-1">
+                        {/* Stempel Dinas Bulat RT: Di sebelah kiri tanda tangan secara resmi */}
                         {showStamp && (
                           <div
-                            className="absolute inset-0 flex items-center justify-center pointer-events-auto cursor-pointer no-print-title"
+                            className="absolute -left-6 sm:-left-10 top-1/2 -translate-y-1/2 z-0 cursor-pointer pointer-events-auto"
                             onClick={() => setIsStampModalOpen(true)}
                             title="Klik untuk mengubah teks/warna stempel dinas"
                           >
@@ -1386,44 +1419,46 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                         )}
 
                         {/* Digital Signature of Ketua RT */}
-                        {leaderSignature ? (
-                          <img
-                            src={leaderSignature}
-                            alt="TTD Ketua RT"
-                            onClick={() =>
-                              setSigCaptureState({
-                                isOpen: true,
-                                title: 'Ubah Tanda Tangan Ketua RT',
-                                targetName: meeting.leader || profile.ketuaRt,
-                                targetRole: 'Pimpinan Musyawarah / Ketua RT',
-                                type: 'leader',
-                                initialSig: leaderSignature,
-                              })
-                            }
-                            className="h-16 max-w-[120px] object-contain mx-auto cursor-pointer z-10 relative"
-                            title="Klik untuk mengubah tanda tangan Ketua RT"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSigCaptureState({
-                                isOpen: true,
-                                title: 'Rekam Tanda Tangan Ketua RT',
-                                targetName: meeting.leader || profile.ketuaRt,
-                                targetRole: 'Pimpinan Musyawarah / Ketua RT',
-                                type: 'leader',
-                              })
-                            }
-                            className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer z-20 relative"
-                          >
-                            <PenTool className="w-3.5 h-3.5 text-emerald-600" />
-                            Bubuhkan TTD
-                          </button>
-                        )}
-                        {!leaderSignature && (
-                          <span className="print-only text-[9pt] text-slate-400 italic font-mono z-10">[Tanda Tangan]</span>
-                        )}
+                        <div className="z-10 relative">
+                          {leaderSignature ? (
+                            <img
+                              src={leaderSignature}
+                              alt="TTD Ketua RT"
+                              onClick={() =>
+                                setSigCaptureState({
+                                 isOpen: true,
+                                 title: 'Ubah Tanda Tangan Ketua RT',
+                                 targetName: meeting.leader || profile.ketuaRt,
+                                 targetRole: 'Pimpinan Musyawarah / Ketua RT',
+                                 type: 'leader',
+                                 initialSig: leaderSignature,
+                               })
+                              }
+                              className="h-18 max-w-[130px] object-contain mx-auto cursor-pointer"
+                              title="Klik untuk mengubah tanda tangan Ketua RT"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSigCaptureState({
+                                  isOpen: true,
+                                  title: 'Rekam Tanda Tangan Ketua RT',
+                                  targetName: meeting.leader || profile.ketuaRt,
+                                  targetRole: 'Pimpinan Musyawarah / Ketua RT',
+                                  type: 'leader',
+                                })
+                              }
+                              className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              <PenTool className="w-3.5 h-3.5 text-emerald-600" />
+                              Bubuhkan TTD
+                            </button>
+                          )}
+                          {!leaderSignature && (
+                            <span className="print-only text-[9pt] text-slate-400 italic font-mono">[Tanda Tangan & Cap]</span>
+                          )}
+                        </div>
                       </div>
 
                       <div>
@@ -1434,6 +1469,60 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Mengetahui Ketua RW (Hierarki Pengesahan di Tengah Bawah) */}
+                  {showMengetahuiRW && (
+                    <div className="mt-8 pt-4 border-t border-slate-200 text-center flex flex-col items-center justify-center page-break-inside-avoid">
+                      <p className="font-semibold text-slate-800 text-[10pt]">Mengetahui,</p>
+                      <p className="font-bold text-slate-900 text-[10pt]">Pengurus Rukun Warga (RW) {profile.rwNumber}</p>
+                      <div className="h-22 flex items-center justify-center relative w-64 my-1">
+                        {rwSignature ? (
+                          <img
+                            src={rwSignature}
+                            alt="TTD Ketua RW"
+                            onClick={() =>
+                              setSigCaptureState({
+                                isOpen: true,
+                                title: 'Ubah Tanda Tangan Ketua RW',
+                                targetName: rwLeaderName,
+                                targetRole: 'Ketua RW',
+                                type: 'rw',
+                                initialSig: rwSignature,
+                              })
+                            }
+                            className="h-16 max-w-[130px] object-contain mx-auto cursor-pointer"
+                            title="Klik untuk mengubah tanda tangan Ketua RW"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSigCaptureState({
+                                isOpen: true,
+                                title: 'Rekam Tanda Tangan Ketua RW',
+                                targetName: rwLeaderName,
+                                targetRole: 'Ketua RW',
+                                type: 'rw',
+                              })
+                            }
+                            className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            <PenTool className="w-3.5 h-3.5 text-emerald-600" />
+                            Bubuhkan TTD
+                          </button>
+                        )}
+                        {!rwSignature && (
+                          <span className="print-only text-[9pt] text-slate-400 italic font-mono">[Tanda Tangan]</span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-950 underline uppercase tracking-wide text-[10pt]">
+                          {rwLeaderName}
+                        </p>
+                        <p className="text-[9pt] text-slate-600">Ketua RW {profile.rwNumber} / Kelurahan {profile.kelurahan}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1444,29 +1533,37 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
             {(docType === 'lengkap' || docType === 'daftar_hadir' || docType === 'presensi_kosong') && (
               <div className={`${docType === 'lengkap' ? 'page-break-before pt-8' : ''} space-y-4`}>
                 
-                {/* Kop Surat Lampiran Kecil */}
-                <div className="border-b-2 border-slate-900 pb-2 flex items-center justify-between text-[9pt] font-semibold text-slate-700 uppercase">
-                  <span>RUKUN TETANGGA {profile.rtNumber} / RW {profile.rwNumber}</span>
-                  <span>LAMPIRAN BERITA ACARA</span>
+                {/* KOP PERSURATAN LAMPIRAN DINAS */}
+                <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2 mb-3">
+                  <div className="text-left text-[9pt] font-semibold text-slate-800 uppercase">
+                    <span>PENGURUS RUKUN TETANGGA {profile.rtNumber} / RW {profile.rwNumber}</span>
+                    <span className="block text-[8pt] text-slate-600 font-normal">KELURAHAN {profile.kelurahan.toUpperCase()}, KECAMATAN {profile.kecamatan.toUpperCase()}</span>
+                  </div>
+
+                  <div className="text-right text-[8.5pt] text-slate-800 space-y-0.5">
+                    <p className="font-bold tracking-wide uppercase">LAMPIRAN I : BERITA ACARA MUSYAWARAH RT</p>
+                    <p>Nomor   : <span className="font-semibold">{docNumber}</span></p>
+                    <p>Tanggal : <span className="font-semibold">{formatDateIndonesian(meeting.date)}</span></p>
+                  </div>
                 </div>
 
-                <div className="text-center my-3">
+                <div className="text-center my-3 space-y-1">
                   <h3 className="text-[12pt] font-black uppercase underline decoration-1 underline-offset-4 tracking-wide text-slate-950">
-                    DAFTAR HADIR PESERTA MUSYAWARAH WARGA RT {profile.rtNumber}
+                    DAFTAR HADIR PESERTA MUSYAWARAH WARGA
                   </h3>
-                  <p className="text-[9.5pt] font-bold text-slate-700 mt-1">
-                    Agenda: {meeting.title}
+                  <p className="text-[10pt] font-bold text-slate-800 uppercase">
+                    RUKUN TETANGGA {profile.rtNumber} RUKUN WARGA {profile.rwNumber}
                   </p>
-                  <p className="text-[9pt] text-slate-600">
-                    Hari/Tanggal: {formatDateIndonesian(meeting.date)} • Waktu: {meeting.startTime} WIB • Tempat: {meeting.location}
-                  </p>
+                  <div className="inline-block text-[9pt] text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1 rounded">
+                    Agenda: <strong>{meeting.title}</strong> • {getDayNameIndonesian(meeting.date)}, {formatDateIndonesian(meeting.date)} • Pukul {meeting.startTime} WIB • {meeting.location}
+                  </div>
                   
                   {/* Quick button to record signatures in table */}
                   <div className="no-print mt-2 flex justify-center gap-2">
                     <button
                       type="button"
                       onClick={handleStartSequentialSigning}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
                     >
                       <PenTool className="w-3 h-3" />
                       Mulai Mode Gilir Rekam TTD Warga Meja Rapat
@@ -1489,7 +1586,7 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                   <tbody>
                     {/* Mode Blank Sheet (Kosong untuk TTD Basah) */}
                     {docType === 'presensi_kosong' ? (
-                      Array.from({ length: 20 }).map((_, idx) => (
+                      Array.from({ length: Math.max(1, customQuotaCount) }).map((_, idx) => (
                         <tr key={idx} className="h-10 page-break-inside-avoid">
                           <td className="border border-slate-400 px-2 py-1 text-center font-bold text-slate-600">{idx + 1}</td>
                           <td className="border border-slate-400 px-3 py-1"></td>
@@ -1597,27 +1694,56 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
                       Total: {meeting.attendances.length} Orang
                     </span>
                     <span className="block text-[8.5pt] font-bold text-emerald-800">
-                      Kuorum Sah: {Math.round((hadirCount / (meeting.targetAttendeesCount || 1)) * 100)}%
+                      Kuorum Sah: {Math.round((hadirCount / (customQuotaCount || 1)) * 100)}%
                     </span>
                   </div>
                 </div>
 
-                {/* PENGESAHAN LAMPIRAN */}
-                <div className="pt-6 page-break-inside-avoid flex justify-between text-[9.5pt] text-center">
-                  <div>
-                    <p className="font-semibold text-slate-700">Notulis Musyawarah,</p>
-                    <div className="h-16 flex items-center justify-center">
-                      <span className="text-[8.5pt] text-slate-400 italic">[TTD]</span>
+                {/* PENGESAHAN LAMPIRAN RESMI */}
+                <div className="pt-6 page-break-inside-avoid flex justify-between items-start text-[9.5pt] text-center">
+                  <div className="w-64 flex flex-col items-center">
+                    <p className="font-semibold text-slate-800">Notulis Musyawarah,</p>
+                    <div className="h-20 flex items-center justify-center relative w-full my-1">
+                      {notarySignature ? (
+                        <img
+                          src={notarySignature}
+                          alt="TTD Notulis"
+                          className="h-16 max-w-[120px] object-contain mx-auto"
+                        />
+                      ) : (
+                        <span className="print-only text-[8.5pt] text-slate-400 italic">[Tanda Tangan]</span>
+                      )}
                     </div>
-                    <p className="font-bold text-slate-900 underline uppercase">{meeting.notary || profile.sekretaris}</p>
+                    <p className="font-bold text-slate-950 underline uppercase tracking-wide">
+                      {meeting.notary || profile.sekretaris}
+                    </p>
+                    <p className="text-[8.5pt] text-slate-600">Sekretaris RT {profile.rtNumber}</p>
                   </div>
 
-                  <div>
-                    <p className="font-semibold text-slate-700">Pimpinan Musyawarah / Ketua RT,</p>
-                    <div className="h-16 flex items-center justify-center">
-                      <span className="text-[8.5pt] text-slate-400 italic">[TTD]</span>
+                  <div className="w-64 flex flex-col items-center relative">
+                    <p className="font-semibold text-slate-800">Pimpinan Musyawarah / Ketua RT,</p>
+                    <div className="h-20 flex items-center justify-center relative w-full my-1">
+                      {showStamp && (
+                        <div className="absolute -left-6 top-1/2 -translate-y-1/2 z-0 scale-75 origin-center">
+                          <StampBadge config={stampConfig} />
+                        </div>
+                      )}
+                      <div className="z-10 relative">
+                        {leaderSignature ? (
+                          <img
+                            src={leaderSignature}
+                            alt="TTD Ketua RT"
+                            className="h-16 max-w-[120px] object-contain mx-auto"
+                          />
+                        ) : (
+                          <span className="print-only text-[8.5pt] text-slate-400 italic">[Tanda Tangan & Cap]</span>
+                        )}
+                      </div>
                     </div>
-                    <p className="font-bold text-slate-900 underline uppercase">{meeting.leader || profile.ketuaRt}</p>
+                    <p className="font-bold text-slate-950 underline uppercase tracking-wide">
+                      {meeting.leader || profile.ketuaRt}
+                    </p>
+                    <p className="text-[8.5pt] text-slate-600">Ketua RT {profile.rtNumber} / RW {profile.rwNumber}</p>
                   </div>
                 </div>
               </div>
@@ -1628,16 +1754,25 @@ export const OfficialPrintDocument: React.FC<OfficialPrintDocumentProps> = ({
             {/* =================================================================== */}
             {showPhotos && meeting.photos && meeting.photos.length > 0 && (docType === 'lengkap' || docType === 'berita_acara') && (
               <div className="page-break-before pt-8 space-y-4">
-                <div className="border-b-2 border-slate-900 pb-2 flex items-center justify-between text-[9pt] font-semibold text-slate-700 uppercase">
-                  <span>RUKUN TETANGGA {profile.rtNumber} / RW {profile.rwNumber}</span>
-                  <span>LAMPIRAN DOKUMENTASI KEGIATAN</span>
+                {/* KOP PERSURATAN LAMPIRAN II */}
+                <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2 mb-3">
+                  <div className="text-left text-[9pt] font-semibold text-slate-800 uppercase">
+                    <span>PENGURUS RUKUN TETANGGA {profile.rtNumber} / RW {profile.rwNumber}</span>
+                    <span className="block text-[8pt] text-slate-600 font-normal">KELURAHAN {profile.kelurahan.toUpperCase()}, KECAMATAN {profile.kecamatan.toUpperCase()}</span>
+                  </div>
+
+                  <div className="text-right text-[8.5pt] text-slate-800 space-y-0.5">
+                    <p className="font-bold tracking-wide uppercase">LAMPIRAN II : BERITA ACARA MUSYAWARAH RT</p>
+                    <p>Nomor   : <span className="font-semibold">{docNumber}</span></p>
+                    <p>Tanggal : <span className="font-semibold">{formatDateIndonesian(meeting.date)}</span></p>
+                  </div>
                 </div>
 
-                <div className="text-center my-3">
+                <div className="text-center my-3 space-y-1">
                   <h3 className="text-[12pt] font-black uppercase underline decoration-1 underline-offset-4 tracking-wide text-slate-950">
                     DOKUMENTASI FOTO PELAKSANAAN MUSYAWARAH RT
                   </h3>
-                  <p className="text-[9pt] text-slate-600 mt-1">
+                  <p className="text-[9.5pt] font-semibold text-slate-700">
                     {meeting.title} • {formatDateIndonesian(meeting.date)}
                   </p>
                 </div>
