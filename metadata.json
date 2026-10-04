@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Rapat & Presensi Online RT",
+  "description": "Aplikasi pencatatan notulen kegiatan rapat warga RT dilengkapi daftar hadir online, tanda tangan digital, scan QR code, dan cetak berita acara.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
