@@ -31,6 +31,7 @@ export const PublicPresensiForm: React.FC<PublicPresensiFormProps> = ({
   const [signature, setSignature] = useState<string | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showCitizenDropdown, setShowCitizenDropdown] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [lastSubmittedName, setLastSubmittedName] = useState<string>('');
@@ -49,18 +50,25 @@ export const PublicPresensiForm: React.FC<PublicPresensiFormProps> = ({
     setPhone(citizen.phone);
     setSearchTerm('');
     setShowCitizenDropdown(false);
+    setErrorMsg(null);
   };
+
+  const isSigRequired = meeting.requireDigitalSignature !== false;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-
-    // Check if require signature for 'Hadir'
-    if (status === 'Hadir' && !signature) {
-      alert('Mohon bubuhkan tanda tangan kehadiran Anda pada kotak tanda tangan.');
+    if (!name.trim()) {
+      setErrorMsg('Mohon lengkapi nama Anda.');
       return;
     }
 
+    // Check if require signature for 'Hadir' or 'Hadir Online'
+    if (isSigRequired && (status === 'Hadir' || status === 'Hadir Online') && !signature) {
+      setErrorMsg('Mohon bubuhkan tanda tangan kehadiran digital Anda pada kotak tanda tangan di bawah.');
+      return;
+    }
+
+    setErrorMsg(null);
     onAddAttendance(meeting.id, {
       meetingId: meeting.id,
       citizenId: selectedCitizenId || undefined,
@@ -263,6 +271,13 @@ export const PublicPresensiForm: React.FC<PublicPresensiFormProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
+                  <span className="text-base">⚠️</span>
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
               {/* Quick citizen picker */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -424,12 +439,26 @@ export const PublicPresensiForm: React.FC<PublicPresensiFormProps> = ({
               )}
 
               {/* Signature Canvas Pad */}
-              {status === 'Hadir' && (
+              {(status === 'Hadir' || status === 'Hadir Online') && (
                 <div className="pt-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Tanda Tangan Digital Warga</span>
+                      {isSigRequired && (
+                        <span className="text-rose-500 font-bold">* (Wajib Sah)</span>
+                      )}
+                    </label>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Goreskan di layar sentuh / mouse
+                    </span>
+                  </div>
                   <SignaturePad
                     value={signature}
-                    onChange={(dataUrl) => setSignature(dataUrl)}
-                    height={130}
+                    onChange={(dataUrl) => {
+                      setSignature(dataUrl);
+                      if (dataUrl) setErrorMsg(null);
+                    }}
+                    height={135}
                   />
                 </div>
               )}

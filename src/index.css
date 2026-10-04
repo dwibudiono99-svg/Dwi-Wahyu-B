@@ -6,6 +6,23 @@
   }
 }
 
+.font-bookman {
+  font-family: 'Bookman Old Style', Georgia, 'Times New Roman', serif;
+}
+.font-times {
+  font-family: 'Times New Roman', Times, serif;
+}
+.font-arial {
+  font-family: Arial, Helvetica, sans-serif;
+}
+.font-jakarta {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+@page {
+  margin: 0;
+}
+
 @media print {
   /* Hide non-printable elements */
   .no-print {
@@ -20,24 +37,27 @@
   body {
     background: white !important;
     color: black !important;
-    font-size: 11pt;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .print-page {
     box-shadow: none !important;
     margin: 0 !important;
-    padding: 0 !important;
+    border: none !important;
     width: 100% !important;
     max-width: 100% !important;
   }
 
   /* Force page breaks cleanly */
   .page-break-before {
-    page-break-before: always;
+    page-break-before: always !important;
+    break-before: page !important;
   }
 
   .page-break-inside-avoid {
-    page-break-inside: avoid;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 
@@ -46,3 +66,4 @@
     display: none !important;
   }
 }
+

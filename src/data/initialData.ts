@@ -13,6 +13,16 @@ export const defaultRTProfile: RTProfile = {
   sekretaris: 'Bpk. Hendra Gunawan, S.Kom',
   bendahara: 'Ibu Hj. Siti Rahmawati',
   kontakRt: '0812-9876-5432',
+  logoHeight: 80,
+  logoType: 'garuda',
+  stampConfig: {
+    textTop: 'PENGURUS RUKUN TETANGGA 004',
+    textMiddle: 'RW 008',
+    textBottom: 'KELURAHAN SUKAMAJU',
+    color: '#4338ca', // Indigo/Ungu resmi dinas
+    rotation: -12,
+    size: 105,
+  },
 };
 
 export const defaultCitizens: Citizen[] = [
@@ -111,6 +121,9 @@ export const defaultMeetings: Meeting[] = [
       },
     ],
     budgetNotes: 'Estimasi Pengeluaran: Lampu & Kabel Rp 350.000, CCTV 2 unit + DVR Rp 1.450.000. Kas RT aman.',
+    leaderSignature: createSampleSig('Ir. H. Bambang S.'),
+    notarySignature: createSampleSig('Hendra Gunawan, S.Kom'),
+    requireDigitalSignature: true,
     photos: [
       'https://images.unsplash.com/photo-1577962917302-cd874c4e31d2?auto=format&fit=crop&w=600&q=80',
       'https://images.unsplash.com/photo-1531497865144-0464ef8fb9a9?auto=format&fit=crop&w=600&q=80',

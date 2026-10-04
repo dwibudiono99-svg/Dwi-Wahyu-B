@@ -23,10 +23,17 @@ import {
   UserPlus,
   MessageSquare,
   Sparkles,
-  Award
+  Award,
+  PenTool,
+  Shield,
+  ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react';
-import { Meeting, RTProfile, Citizen, Attendance, AttendanceStatus, ActionItem } from '../types/meeting';
+import { Meeting, RTProfile, Citizen, Attendance, AttendanceStatus, ActionItem, StampConfig } from '../types/meeting';
 import { formatDateIndonesian, formatDateTimeIndonesian, exportAttendanceToCSV } from '../utils/formatters';
+import { StampBadge } from './StampBadge';
+import { StampCustomizerModal } from './StampCustomizerModal';
+import { SignatureCaptureModal } from './SignatureCaptureModal';
 
 interface MeetingDetailProps {
   meeting: Meeting;
@@ -53,11 +60,145 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
   onOpenPublicPresensi,
   onEditMeeting,
 }) => {
-  const [activeTab, setActiveTab] = useState<'presensi' | 'notulen' | 'agenda' | 'foto'>('presensi');
+  const [activeTab, setActiveTab] = useState<'presensi' | 'notulen' | 'agenda' | 'foto' | 'legalisasi'>('presensi');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Search & filter attendances
   const [attendanceSearch, setAttendanceSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('Semua');
+
+  // Stempel & Signature Modals State
+  const [isStampModalOpen, setIsStampModalOpen] = useState(false);
+  const currentStampConfig: StampConfig = meeting.stampConfig || profile.stampConfig || {
+    textTop: `PENGURUS RUKUN TETANGGA ${profile.rtNumber}`,
+    textMiddle: `RW ${profile.rwNumber}`,
+    textBottom: `KELURAHAN ${profile.kelurahan.toUpperCase()}`,
+    color: '#4338ca',
+    rotation: -12,
+    size: 105,
+  };
+
+  const [sigCaptureState, setSigCaptureState] = useState<{
+    isOpen: boolean;
+    title: string;
+    targetName: string;
+    targetRole?: string;
+    type: 'leader' | 'notary' | 'bendahara' | 'rw' | 'attendee';
+    attendeeId?: string;
+    initialSig?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    targetName: '',
+    type: 'attendee',
+  });
+
+  const handleSaveStamp = (newConfig: StampConfig) => {
+    onUpdateMeeting({
+      ...meeting,
+      stampConfig: newConfig,
+    });
+    setToastMessage('Stempel dinas RT untuk rapat ini berhasil diperbarui!');
+  };
+
+  const handleSaveCapturedSignature = (dataUrl: string) => {
+    const { type, attendeeId } = sigCaptureState;
+    if (type === 'leader') {
+      onUpdateMeeting({ ...meeting, leaderSignature: dataUrl });
+      setToastMessage('Tanda tangan digital Ketua RT (Pimpinan Musyawarah) berhasil disimpan.');
+    } else if (type === 'notary') {
+      onUpdateMeeting({ ...meeting, notarySignature: dataUrl });
+      setToastMessage('Tanda tangan digital Notulis / Sekretaris RT berhasil disimpan.');
+    } else if (type === 'bendahara') {
+      onUpdateMeeting({ ...meeting, bendaharaSignature: dataUrl });
+      setToastMessage('Tanda tangan digital Bendahara RT berhasil disimpan.');
+    } else if (type === 'rw') {
+      onUpdateMeeting({ ...meeting, rwSignature: dataUrl });
+      setToastMessage('Tanda tangan digital Ketua RW berhasil disimpan.');
+    } else if (type === 'attendee' && attendeeId) {
+      const updatedAttendances = meeting.attendances.map((a) =>
+        a.id === attendeeId ? { ...a, signature: dataUrl } : a
+      );
+      onUpdateMeeting({ ...meeting, attendances: updatedAttendances });
+      setToastMessage('Tanda tangan digital kehadiran warga berhasil dicatat.');
+    }
+    setSigCaptureState((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const handleSaveAndNextAttendee = (dataUrl: string) => {
+    const { attendeeId } = sigCaptureState;
+    if (!attendeeId) return;
+
+    const updatedAttendances = meeting.attendances.map((a) =>
+      a.id === attendeeId ? { ...a, signature: dataUrl } : a
+    );
+    onUpdateMeeting({ ...meeting, attendances: updatedAttendances });
+
+    const nextUnsigned = updatedAttendances.find(
+      (a) => !a.signature && a.id !== attendeeId && (a.status === 'Hadir' || a.status === 'Hadir Online')
+    );
+    if (nextUnsigned) {
+      setSigCaptureState({
+        isOpen: true,
+        title: 'Rekam Tanda Tangan Kehadiran Warga',
+        targetName: nextUnsigned.name,
+        targetRole: nextUnsigned.houseNumber,
+        type: 'attendee',
+        attendeeId: nextUnsigned.id,
+        initialSig: undefined,
+      });
+    } else {
+      setSigCaptureState((prev) => ({ ...prev, isOpen: false }));
+      setToastMessage('Seluruh anggota rapat yang hadir telah berhasil membubuhkan tanda tangan!');
+    }
+  };
+
+  const handleOpenAttendeeSignature = (att: Attendance) => {
+    setSigCaptureState({
+      isOpen: true,
+      title: 'Rekam Tanda Tangan Warga',
+      targetName: att.name,
+      targetRole: att.houseNumber || 'Warga RT',
+      type: 'attendee',
+      attendeeId: att.id,
+      initialSig: att.signature,
+    });
+  };
+
+  const handleStartSequentialSigning = () => {
+    const firstUnsigned =
+      meeting.attendances.find(
+        (a) => !a.signature && (a.status === 'Hadir' || a.status === 'Hadir Online')
+      ) || meeting.attendances[0];
+
+    if (!firstUnsigned) {
+      setToastMessage('Belum ada data warga dalam daftar hadir rapat ini.');
+      return;
+    }
+
+    setSigCaptureState({
+      isOpen: true,
+      title: 'Mode Meja Presensi: Tanda Tangan Bergilir',
+      targetName: firstUnsigned.name,
+      targetRole: firstUnsigned.houseNumber || 'Warga RT',
+      type: 'attendee',
+      attendeeId: firstUnsigned.id,
+      initialSig: firstUnsigned.signature,
+    });
+  };
+
+  const handleToggleRequireSignature = () => {
+    const nextVal = meeting.requireDigitalSignature === false ? true : false;
+    onUpdateMeeting({
+      ...meeting,
+      requireDigitalSignature: nextVal,
+    });
+    setToastMessage(
+      nextVal
+        ? 'Tanda tangan digital kini diwajibkan bagi setiap warga yang mengisi presensi.'
+        : 'Tanda tangan digital kini bersifat opsional.'
+    );
+  };
 
   // Quick manual attendance addition
   const [showManualAttendance, setShowManualAttendance] = useState(false);
@@ -246,8 +387,28 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
     }
   };
 
+  const attendeesWithSig = meeting.attendances.filter((a) => !!a.signature).length;
+  const attendeesTotal = meeting.attendances.length;
+  const sigPercentage = attendeesTotal > 0 ? Math.round((attendeesWithSig / attendeesTotal) * 100) : 0;
+
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="bg-emerald-100 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-xl text-xs flex items-center justify-between animate-in fade-in duration-200 shadow-xs">
+          <span className="flex items-center gap-2 font-bold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            {toastMessage}
+          </span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-700 hover:text-emerald-950 font-bold ml-2 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Bar Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
@@ -437,11 +598,74 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
           <Camera className="w-4 h-4" />
           Dokumentasi Foto ({meeting.photos.length})
         </button>
+
+        <button
+          onClick={() => setActiveTab('legalisasi')}
+          className={`flex items-center gap-2 pb-3 px-4 text-xs font-bold border-b-2 transition-all ${
+            activeTab === 'legalisasi'
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Shield className="w-4 h-4 text-indigo-600" />
+          Stempel Dinas & Legalisasi Pengurus
+          {(meeting.leaderSignature || meeting.notarySignature) && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500" title="Tanda tangan pengurus telah dibubuhkan" />
+          )}
+        </button>
       </div>
 
       {/* TAB 1: DAFTAR HADIR ONLINE */}
       {activeTab === 'presensi' && (
         <div className="space-y-4">
+          {/* Digital Signature Requirement & Batch Signing Bar */}
+          <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <PenTool className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Tanda Tangan Digital Anggota Rapat
+                  </h4>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    {attendeesWithSig} / {meeting.attendances.length} Terekam ({sigPercentage}%)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Rekam tanda tangan digital sah bagi seluruh anggota rapat secara online atau langsung di meja presensi.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleRequireSignature}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  meeting.requireDigitalSignature !== false
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+                title="Aktifkan/nonaktifkan kewajiban tanda tangan bagi pengisi formulir presensi"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {meeting.requireDigitalSignature !== false ? 'Wajib TTD: Aktif' : 'Wajib TTD: Nonaktif'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleStartSequentialSigning}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+                title="Buka form tanda tangan bergilir satu per satu untuk warga di meja rapat"
+              >
+                <PenTool className="w-3.5 h-3.5 text-emerald-400" />
+                Mode Meja: TTD Bergilir
+              </button>
+            </div>
+          </div>
+
           {/* Attendance Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
             <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -644,19 +868,36 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
                         </td>
                         <td className="px-4 py-3 text-center">
                           {att.signature ? (
-                            <button
-                              onClick={() => setPreviewSignature({ name: att.name, url: att.signature! })}
-                              className="group inline-flex items-center gap-1 px-2 py-1 bg-slate-50 hover:bg-emerald-50 rounded-lg border border-slate-200 hover:border-emerald-300 transition-all cursor-pointer"
-                            >
-                              <img
-                                src={att.signature}
-                                alt="TTD"
-                                className="h-6 max-w-[80px] object-contain"
-                              />
-                              <Eye className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
-                            </button>
+                            <div className="inline-flex items-center gap-1.5 justify-center">
+                              <button
+                                onClick={() => setPreviewSignature({ name: att.name, url: att.signature! })}
+                                className="group inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-emerald-50 rounded-lg border border-slate-200 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
+                                title="Lihat tanda tangan"
+                              >
+                                <img
+                                  src={att.signature}
+                                  alt="TTD"
+                                  className="h-6 max-w-[70px] object-contain"
+                                />
+                                <Eye className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenAttendeeSignature(att)}
+                                className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                                title="Rekam ulang tanda tangan warga ini"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-[11px] text-slate-400 italic">Tanpa TTD</span>
+                            <button
+                              onClick={() => handleOpenAttendeeSignature(att)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors shadow-2xs cursor-pointer"
+                              title="Rekam tanda tangan digital warga ini"
+                            >
+                              <PenTool className="w-3 h-3 text-amber-600" />
+                              + Rekam TTD
+                            </button>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -1008,6 +1249,405 @@ export const MeetingDetail: React.FC<MeetingDetailProps> = ({
           </div>
         </div>
       )}
+
+      {/* TAB 5: STEMPEL DINAS & LEGALISASI PENGURUS */}
+      {activeTab === 'legalisasi' && (
+        <div className="space-y-6">
+          {/* Header Info Banner */}
+          <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-white border border-indigo-200/80 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Stempel Dinas & Legalisasi Digital Pengurus RT
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Kelola stempel basah digital resmi dan rekam tanda tangan digital pengurus RT untuk keabsahan Berita Acara & Laporan Rapat.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={onOpenPrint}
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs shrink-0 cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-emerald-400" />
+              Buka Pratinjau Cetak Berita Acara
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Card 1: Stempel Dinas RT */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    Stempel Dinas RT Digital
+                  </h4>
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                    Cap Basah Sah
+                  </span>
+                </div>
+
+                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[180px] shadow-inner relative overflow-hidden">
+                  <StampBadge config={currentStampConfig} />
+                  <span className="text-[10px] text-slate-400 mt-3 font-medium">
+                    Pratinjau Stempel Dinas pada Surat & Berita Acara
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Teks Lingkar Atas:</span>
+                    <strong className="text-slate-800 text-right truncate max-w-[180px]">{currentStampConfig.textTop}</strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Teks Tengah:</span>
+                    <strong className="text-slate-800">{currentStampConfig.textMiddle}</strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Teks Lingkar Bawah:</span>
+                    <strong className="text-slate-800 text-right truncate max-w-[180px]">{currentStampConfig.textBottom}</strong>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-500">Warna Tinta / Derajat:</span>
+                    <span className="flex items-center gap-1 font-semibold text-slate-700">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: currentStampConfig.color }} />
+                      {currentStampConfig.rotation}° Kemiringan
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsStampModalOpen(true)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                Ubah Teks & Desain Stempel Dinas
+              </button>
+            </div>
+
+            {/* Card 2: Susunan Tanda Tangan Digital Pengurus RT */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <PenTool className="w-4 h-4 text-emerald-600" />
+                    Tanda Tangan Digital Pengurus & Penanggung Jawab
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Rekam tanda tangan digital langsung melalui layar sentuh atau kursor mouse
+                  </p>
+                </div>
+
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                  {[meeting.leaderSignature, meeting.notarySignature, meeting.bendaharaSignature, meeting.rwSignature].filter(Boolean).length} / 4 Pengurus
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Ketua RT */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                        Pimpinan Musyawarah
+                      </span>
+                      {meeting.leaderSignature ? (
+                        <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Sah Terekam
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Belum Terekam
+                        </span>
+                      )}
+                    </div>
+                    <h5 className="text-sm font-bold text-slate-900">{meeting.leader}</h5>
+                    <p className="text-[11px] text-slate-500">Ketua RT {profile.rtNumber}</p>
+
+                    <div className="mt-2 h-20 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-2 overflow-hidden shadow-2xs">
+                      {meeting.leaderSignature ? (
+                        <img
+                          src={meeting.leaderSignature}
+                          alt="TTD Ketua RT"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Belum ada tanda tangan</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSigCaptureState({
+                          isOpen: true,
+                          title: 'Rekam Tanda Tangan Ketua RT',
+                          targetName: meeting.leader,
+                          targetRole: `Pimpinan Musyawarah / Ketua RT ${profile.rtNumber}`,
+                          type: 'leader',
+                          initialSig: meeting.leaderSignature,
+                        })
+                      }
+                      className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      {meeting.leaderSignature ? 'Ubah TTD' : 'Rekam TTD'}
+                    </button>
+                    {meeting.leaderSignature && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateMeeting({ ...meeting, leaderSignature: undefined });
+                          setToastMessage('Tanda tangan Ketua RT dihapus.');
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Hapus tanda tangan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Sekretaris RT */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
+                        Notulis Rapat
+                      </span>
+                      {meeting.notarySignature ? (
+                        <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Sah Terekam
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Belum Terekam
+                        </span>
+                      )}
+                    </div>
+                    <h5 className="text-sm font-bold text-slate-900">{meeting.notary}</h5>
+                    <p className="text-[11px] text-slate-500">Sekretaris RT {profile.rtNumber}</p>
+
+                    <div className="mt-2 h-20 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-2 overflow-hidden shadow-2xs">
+                      {meeting.notarySignature ? (
+                        <img
+                          src={meeting.notarySignature}
+                          alt="TTD Sekretaris"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Belum ada tanda tangan</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSigCaptureState({
+                          isOpen: true,
+                          title: 'Rekam Tanda Tangan Sekretaris RT',
+                          targetName: meeting.notary,
+                          targetRole: `Notulis Musyawarah / Sekretaris RT ${profile.rtNumber}`,
+                          type: 'notary',
+                          initialSig: meeting.notarySignature,
+                        })
+                      }
+                      className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      {meeting.notarySignature ? 'Ubah TTD' : 'Rekam TTD'}
+                    </button>
+                    {meeting.notarySignature && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateMeeting({ ...meeting, notarySignature: undefined });
+                          setToastMessage('Tanda tangan Sekretaris dihapus.');
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Hapus tanda tangan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Bendahara RT */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
+                        Keuangan & Anggaran
+                      </span>
+                      {meeting.bendaharaSignature ? (
+                        <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Sah Terekam
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          Opsional
+                        </span>
+                      )}
+                    </div>
+                    <h5 className="text-sm font-bold text-slate-900">{profile.bendahara || 'Bendahara RT'}</h5>
+                    <p className="text-[11px] text-slate-500">Bendahara RT {profile.rtNumber}</p>
+
+                    <div className="mt-2 h-20 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-2 overflow-hidden shadow-2xs">
+                      {meeting.bendaharaSignature ? (
+                        <img
+                          src={meeting.bendaharaSignature}
+                          alt="TTD Bendahara"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Belum ada tanda tangan</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSigCaptureState({
+                          isOpen: true,
+                          title: 'Rekam Tanda Tangan Bendahara RT',
+                          targetName: profile.bendahara || 'Bendahara RT',
+                          targetRole: `Bendahara RT ${profile.rtNumber}`,
+                          type: 'bendahara',
+                          initialSig: meeting.bendaharaSignature,
+                        })
+                      }
+                      className="flex-1 py-1.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      {meeting.bendaharaSignature ? 'Ubah TTD' : 'Rekam TTD'}
+                    </button>
+                    {meeting.bendaharaSignature && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateMeeting({ ...meeting, bendaharaSignature: undefined });
+                          setToastMessage('Tanda tangan Bendahara dihapus.');
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Hapus tanda tangan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Mengetahui Ketua RW */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                        Mengetahui
+                      </span>
+                      {meeting.rwSignature ? (
+                        <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Sah Terekam
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          Opsional
+                        </span>
+                      )}
+                    </div>
+                    <h5 className="text-sm font-bold text-slate-900">Ketua RW {profile.rwNumber}</h5>
+                    <p className="text-[11px] text-slate-500">Legalitas Lingkungan RW {profile.rwNumber}</p>
+
+                    <div className="mt-2 h-20 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-2 overflow-hidden shadow-2xs">
+                      {meeting.rwSignature ? (
+                        <img
+                          src={meeting.rwSignature}
+                          alt="TTD Ketua RW"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Belum ada tanda tangan</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSigCaptureState({
+                          isOpen: true,
+                          title: 'Rekam Tanda Tangan Ketua RW',
+                          targetName: `Ketua RW ${profile.rwNumber}`,
+                          targetRole: `Mengetahui / Ketua RW ${profile.rwNumber}`,
+                          type: 'rw',
+                          initialSig: meeting.rwSignature,
+                        })
+                      }
+                      className="flex-1 py-1.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <PenTool className="w-3 h-3" />
+                      {meeting.rwSignature ? 'Ubah TTD' : 'Rekam TTD'}
+                    </button>
+                    {meeting.rwSignature && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateMeeting({ ...meeting, rwSignature: undefined });
+                          setToastMessage('Tanda tangan Ketua RW dihapus.');
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Hapus tanda tangan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stamp Customizer Modal */}
+      <StampCustomizerModal
+        isOpen={isStampModalOpen}
+        onClose={() => setIsStampModalOpen(false)}
+        config={currentStampConfig}
+        onSave={handleSaveStamp}
+      />
+
+      {/* Signature Capture Modal (Pengurus & Peserta) */}
+      <SignatureCaptureModal
+        isOpen={sigCaptureState.isOpen}
+        onClose={() => setSigCaptureState((prev) => ({ ...prev, isOpen: false }))}
+        title={sigCaptureState.title}
+        targetName={sigCaptureState.targetName}
+        targetRole={sigCaptureState.targetRole}
+        initialSignature={sigCaptureState.initialSig}
+        onSave={handleSaveCapturedSignature}
+        onSaveAndNext={sigCaptureState.type === 'attendee' ? handleSaveAndNextAttendee : undefined}
+        hasNext={sigCaptureState.type === 'attendee'}
+      />
 
       {/* Signature Preview Modal */}
       {previewSignature && (

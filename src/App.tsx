@@ -165,6 +165,8 @@ export default function App() {
         meeting={activeDocMeeting}
         profile={profile}
         onBack={() => setIsPrintView(false)}
+        onUpdateMeeting={handleUpdateMeeting}
+        onUpdateProfile={(newProfile) => setProfile(newProfile)}
       />
     );
   }
@@ -313,6 +315,10 @@ export default function App() {
                 }}
                 onOpenPublicPresensi={(meetingId) => {
                   setPublicPresensiMeetingId(meetingId);
+                }}
+                onOpenPrint={(m) => {
+                  setTargetModalMeeting(m);
+                  setIsPrintView(true);
                 }}
               />
             </div>

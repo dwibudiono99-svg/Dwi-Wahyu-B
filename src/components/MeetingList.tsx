@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Search,
   Filter,
-  UserCheck
+  UserCheck,
+  Printer
 } from 'lucide-react';
 import { Meeting, RTProfile } from '../types/meeting';
 import { formatDateIndonesian } from '../utils/formatters';
@@ -25,6 +26,7 @@ interface MeetingListProps {
   onOpenQR: (meeting: Meeting) => void;
   onOpenWhatsApp: (meeting: Meeting) => void;
   onOpenPublicPresensi: (meetingId: string) => void;
+  onOpenPrint: (meeting: Meeting) => void;
 }
 
 export const MeetingList: React.FC<MeetingListProps> = ({
@@ -36,6 +38,7 @@ export const MeetingList: React.FC<MeetingListProps> = ({
   onOpenQR,
   onOpenWhatsApp,
   onOpenPublicPresensi,
+  onOpenPrint,
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -190,6 +193,13 @@ export const MeetingList: React.FC<MeetingListProps> = ({
                 {/* Card Actions Footer */}
                 <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onOpenPrint(m)}
+                      title="Pratinjau & Cetak Berita Acara Resmi"
+                      className="p-1.5 text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
+                    >
+                      <Printer className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => onOpenQR(m)}
                       title="Tampilkan QR Code Presensi"

@@ -1,3 +1,14 @@
+export interface StampConfig {
+  textTop: string;
+  textMiddle: string;
+  textBottom: string;
+  color: string; // Hex color e.g. #4338ca (ungu/indigo resmi dinas)
+  customStampImage?: string; // Data URL scan cap stempel asli
+  rotation: number; // Derajat kemiringan (-25 s/d 25)
+  size: number; // Diameter stempel dalam pixel (80 s/d 140)
+  shape?: 'circle_double' | 'circle_single' | 'oval';
+}
+
 export interface RTProfile {
   rtNumber: string;
   rwNumber: string;
@@ -12,6 +23,12 @@ export interface RTProfile {
   bendahara: string;
   kontakRt: string;
   logoUrl?: string;
+  logoHeight?: number; // Tinggi logo dalam pixel (misal: 80px)
+  logoType?: 'garuda' | 'rt' | 'custom' | 'none';
+  ketuaRtSignature?: string; // Default signature Ketua RT
+  sekretarisSignature?: string; // Default signature Sekretaris
+  bendaharaSignature?: string; // Default signature Bendahara
+  stampConfig?: StampConfig;
 }
 
 export interface Citizen {
@@ -77,4 +94,11 @@ export interface Meeting {
   attendances: Attendance[];
   targetAttendeesCount: number; // Target KK hadir
   token: string; // Unique token for public presensi
+  leaderSignature?: string; // Tanda tangan digital Ketua RT / Pimpinan
+  notarySignature?: string; // Tanda tangan digital Notulis / Sekretaris
+  bendaharaSignature?: string; // Tanda tangan digital Bendahara RT
+  rwSignature?: string; // Tanda tangan Mengetahui Ketua RW
+  stampConfig?: StampConfig; // Kustomisasi stempel per rapat
+  requireDigitalSignature?: boolean; // Apakah tanda tangan wajib bagi setiap warga
+  logoHeight?: number; // Kustomisasi tinggi logo pada berita acara rapat ini
 }
